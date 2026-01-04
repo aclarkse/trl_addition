@@ -18,13 +18,10 @@ def _coerce_to_str(x, tokenizer=None) -> str:
         return x
     if x is None:
         return ""
-    # chat dict: {"role": ..., "content": ...}
     if isinstance(x, dict) and "content" in x:
         return str(x["content"])
-    # chat list: [{"role":"user","content":...}, ...]
     if isinstance(x, list) and len(x) > 0 and isinstance(x[0], dict) and "content" in x[0]:
         return str(x[0]["content"])
-    # pretokenized ids
     if isinstance(x, list) and len(x) > 0 and all(isinstance(t, int) for t in x):
         if tokenizer is None:
             return str(x)
@@ -110,7 +107,6 @@ def score_em_by_carries(
         total += 1
         correct_any += int(is_correct)
 
-        # carry bucket
         try:
             a, b = parse_prompt_abacus(prompt, bead=bead, sep=sep, reverse_digits=reverse_digits)
             c = count_carries(a, b, k) if k >= 2 else 0
@@ -271,14 +267,11 @@ def main(args):
     model = AutoModelForCausalLM.from_pretrained(load_id).to(device)
     model.eval()
 
-    # datasets
     train_ds, test_ds = get_datasets(args, tokenizer)
 
-    # eval sizing
     max_eval_train = int(getattr(args.eval_pars, "max_eval_train", 2000))
     max_eval_test = int(getattr(args.eval_pars, "max_eval_test", 5000))
 
-    # generation config
     gen_cfg = GenConfig(
         max_new_tokens=int(getattr(args.eval_pars, "max_tokens", 64)),
         temperature=float(getattr(args.eval_pars, "temperature", 0.0)),
@@ -286,23 +279,34 @@ def main(args):
         batch_size=int(getattr(args.eval_pars, "batch_size", 64)),
     )
 
-    # scoring params
     bead = str(getattr(args.dataset_pars, "bead", "|"))
     empty = str(getattr(args.dataset_pars, "empty", "."))
     sep = "/"
     reverse_digits = bool(getattr(args.dataset_pars, "reverse_digits", True))
     k = int(getattr(args.dataset_pars, "num_digits", 2))
 
-    # output dir (default: model_dir if provided else cwd)
     out_dir = model_dir if model_dir else os.getcwd()
     os.makedirs(out_dir, exist_ok=True)
 
-    # inference
+
     train_batches = run_inference_split(model, tokenizer, train_ds, "train", gen_cfg, max_examples=max_eval_train)
     test_batches = run_inference_split(model, tokenizer, test_ds, "test", gen_cfg, max_examples=max_eval_test)
 
     train_examples = flatten_generated_outputs(train_batches)
     test_examples = flatten_generated_outputs(test_batches)
+
+    results_path = os.path.join(out_dir, "results.json")
+    with open(results_path, "w") as f:
+        json.dump(
+            {
+                "train": train_examples,
+                "test": test_examples,
+            },
+            f,
+            indent=2
+        )
+    logging.info(f"Saved inference results: {results_path}")
+    # ---------------------------------------------
 
     train_metrics = score_em_by_carries(train_examples, bead=bead, empty=empty, sep=sep, reverse_digits=reverse_digits, k=k)
     test_metrics = score_em_by_carries(test_examples, bead=bead, empty=empty, sep=sep, reverse_digits=reverse_digits, k=k)
