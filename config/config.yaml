@@ -1,0 +1,110 @@
+# =========================
+# Global
+# =========================
+debug: false
+seed: 1
+resume: false
+method: scratch
+save_dir: exp/addition_k3_abacus/
+
+hydra:
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  job_logging:
+    root:
+      level: INFO
+
+# =========================
+# Weights & Biases
+# =========================
+wandb:
+  entity: andrea-c-sev-columbia-university
+  project: learning-addition
+  group: k3-abacus
+  log: true
+
+# =========================
+# Model (small scratch LM)
+# =========================
+model_pars:
+  model_dir: ""
+  hf_model_id: gpt2
+  hf_tokenizer_id: gpt2
+
+  num_hidden_layers: 4
+  hidden_size: 256
+  num_attention_heads: 4
+  intermediate_size: 1024
+
+# =========================
+# Dataset (abacus, k=3)
+# =========================
+dataset_pars:
+  n_train: 50000
+  n_test: 5000
+  commutative_aug: true
+
+  # abacus encoding
+  bead: "|"
+  empty: "."
+  digit_width: 9
+
+  # carry control via digit bias
+  digit_bias_mode: uniform     # uniform | large
+  p_large_digit: 0.7           # only used if digit_bias_mode=large
+
+  # explicit carry constraints (off by default)
+  min_num_carries_train: null
+  min_num_carries_test: null
+
+# =========================
+# Training
+# =========================
+finetuning_pars:
+  num_train_epochs: 20
+  per_device_train_batch_size: 32
+  gradient_accumulation_steps: 2
+  reference_learning_rate: 0.0002
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.03
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  save_total_limit: 3
+  save_n_per_epoch: 2
+  log_n_per_epoch: 20
+  eval_n_per_epoch: 4
+  optimiser: adamw_torch
+  bf16: true
+  fp16: false
+  packing: false
+  gradient_checkpointing: false
+  label_smoothing_factor: 0.0
+  ddp_find_unused_parameters: false
+  dataloader_num_workers: 2
+  dataloader_pin_memory: true
+  dataloader_prefetch_factor: 2
+  dataloader_persistent_workers: true
+
+  deepspeed: ""
+  fsdp: ""
+
+
+# =========================
+# Evaluation / Inference
+# =========================
+eval_pars:
+  num_workers: 1
+  batch_size: 64
+  num_samples: 1
+
+  # generation length (safe for k=3 abacus outputs)
+  max_tokens: 64
+  temperature: 0.0
+
+  tensor_parallel_size: 1
+  pipeline_parallel_size: 1
+  data_parallel_size: 1
+  gpu_memory_utilization: 0.92
